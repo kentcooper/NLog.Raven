@@ -27,7 +27,7 @@ More information about NuGet package avaliable at
           connectionStringName="String"
           url="String"
           user="String"
-          password="Song"
+          password="String"
           domain="String"
           database="String"          
           idType="String"
