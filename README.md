@@ -40,15 +40,20 @@ More information about NuGet package avaliable at
 ```
 ## Parameters
 
-### Options
-
 _connectionStringName_ - The name of the connection string to get from the config file. 
+
 _url_ - The url of the raven db server
+
 _user_ - The windows user name to use when making the connection
+
 _password_ - The password of the user to use when making the connection
+
 _domain_ - The windows domain
+
 _database_ - The name of the database to connect to
+
 _idType_ - The id type to use for log entries. Either 'String' | 'Guid'
+
 _collectionName_ - Set this to change the default document collection name
 
 ## Examples
