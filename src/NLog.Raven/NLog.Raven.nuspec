@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<package >
+  <metadata>
+    <id>$id$</id>
+    <version>$version$</version>
+    <title>$title$</title>
+    <authors>Kent Cooper</authors>
+    <owners>kcdevnc</owners>
+    <licenseUrl>https://github.com/kentcooper/NLog.Raven/blob/master/LICENSE</licenseUrl>
+    <projectUrl>https://github.com/kentcooper/NLog.Raven</projectUrl>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <description>RavenDB target for NLog</description>
+    <releaseNotes>Initial release</releaseNotes>
+    <copyright>Copyright 2017</copyright>
+    <tags>NLog RavenDB</tags>
+    <dependencies>
+      <group targetFramework=".NETFramework4.6.1">
+        <dependency id="NLog" version="4.4.0" />
+        <dependency id="RavenDB.Client" version="3.5.0" />
+      </group>
+    </dependencies>
+  </metadata>
+</package>
