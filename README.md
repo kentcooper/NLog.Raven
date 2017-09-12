@@ -69,9 +69,9 @@ _collectionName_ - Set this to change the default document collection name
           <field name="Exception" layout="${exception:format=toString,Data:maxInnerExceptionLevel=10}"/>
         </target>
       </target>
-    </targets>
-    <rules>
-      <logger name="*" minlevel="Info" writeTo="raven"/>
-    </rules>
+</targets>
+<rules>
+    <logger name="*" minlevel="Info" writeTo="raven"/>
+</rules>
 ```
 
