@@ -2,13 +2,14 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading.Tasks;
 using NLog.Common;
 using NLog.Config;
 using NLog.Targets;
-using Raven.Client.Document;
-using Raven.Abstractions.Logging.LogProviders;
+using Raven.Client.Documents;
+using Raven.Client.Documents.Conventions;
 
 namespace NLog.Raven
 {
@@ -16,15 +17,14 @@ namespace NLog.Raven
     public class RavenTarget : TargetWithLayout
     {
         private DocumentStore _documentStore;
-
-        public string ConnectionStringName { get; set; }
-        public string Url { get; set; }
-        public string User { get; set; }
-        public string Password { get; set; }
+        public string Urls { get; set; }
         public string Database { get; set; }
-        public string ApiKey { get; set; }
-        public string Domain { get; set; }
         public string IdType { get; set; } = "string";
+        public string CertPath { get; set; }
+        public string CertStoreLocation { get; set; }
+        public string CertThumbprint { get; set; }
+        public string CertCn { get; set; }
+        public string CertStoreName { get; set; }
 
         public string CollectionName { get; set; } = "NLogEntries";
 
@@ -40,55 +40,47 @@ namespace NLog.Raven
         {
             base.InitializeTarget();
 
-            if (!string.IsNullOrEmpty(ConnectionStringName))
+            if (string.IsNullOrWhiteSpace(Urls))
             {
-                _documentStore = new DocumentStore
-                {
-                    ConnectionStringName = ConnectionStringName
-                };
-            }
-            else
-            {
-                if (string.IsNullOrEmpty(Url))
-                {
-                    throw new NLogConfigurationException(
-                        "Cannot resolve RavenDB Url. Please make sure either the Url or ConnectionStringName property is set.");
-                }
-
-                _documentStore = new DocumentStore
-                {
-                    Url = Url
-                };
-
-                if (!string.IsNullOrWhiteSpace(Database))
-                {
-                    _documentStore.DefaultDatabase = Database;
-                }
-
-                if (!string.IsNullOrWhiteSpace(ApiKey))
-                {
-                    _documentStore.ApiKey = ApiKey;
-                }
-                else if (!string.IsNullOrWhiteSpace(User) && !string.IsNullOrWhiteSpace(Password) && !string.IsNullOrWhiteSpace(Domain))
-                {
-                    _documentStore.Credentials = new NetworkCredential(User, Password, Domain);
-                }
+                throw new NLogConfigurationException(
+                    "Cannot resolve RavenDB Url. Please make sure either the Url or ConnectionStringName property is set.");
             }
 
-            _documentStore.Conventions.FindTypeTagName = type => type == typeof(NLogEntry) ? CollectionName : DocumentConvention.DefaultTypeTagName(type);
-            _documentStore.Conventions.DisableProfiling = true;
-            NLogLogManager.ProviderIsAvailableOverride = false;
+            _documentStore = new DocumentStore
+            {
+                Urls = Urls.Split('\u002C')
+            };
+
+            if (!string.IsNullOrWhiteSpace(Database))
+            {
+                _documentStore.Database = Database;
+            }
+
+            if (!string.IsNullOrWhiteSpace(CertPath))
+            {
+                X509Certificate2 clientCertificate = new X509Certificate2(CertPath);
+                _documentStore.Certificate = clientCertificate;
+            }
+            else if (!string.IsNullOrWhiteSpace(CertStoreName) && (!string.IsNullOrWhiteSpace(CertCn) || !string.IsNullOrWhiteSpace(CertThumbprint)))
+            {
+                _documentStore.Certificate = LoadCertificate();
+            }
+
+
+            _documentStore.Conventions.FindCollectionName = type => type == typeof(NLogEntry) ? CollectionName : DocumentConventions.DefaultGetCollectionName(type);                        
             _documentStore.Initialize();
 
 
 
         }
 
+        [Obsolete]
         protected override void Write(AsyncLogEventInfo logEvent)
         {
             Write(new[] { logEvent });
         }
 
+        [Obsolete]
         protected override void Write(AsyncLogEventInfo[] logEvents)
         {
             try
@@ -165,5 +157,43 @@ namespace NLog.Raven
 
             return entry;
         }
+
+
+        private X509Certificate2 LoadCertificate()
+        {
+            StoreLocation location;
+
+            switch (CertStoreLocation)
+            {
+                case "CurrentUser":
+                    location = StoreLocation.CurrentUser;
+                    break;
+                default:
+                    location = StoreLocation.LocalMachine;
+                    break;
+            }
+            X509Store store = new X509Store(CertStoreName, location);
+
+            store.Open(OpenFlags.ReadOnly | OpenFlags.OpenExistingOnly);
+
+            X509Certificate2Collection results;
+
+            if (!string.IsNullOrEmpty(CertCn))
+            {
+                results = store.Certificates.Find(X509FindType.FindBySubjectName, CertCn, false);
+            }
+            else
+            {
+                results = store.Certificates.Find(X509FindType.FindByThumbprint, CertThumbprint, false);
+            }
+
+            if (results.Count < 1)
+            {
+                throw new NLogConfigurationException("The raven database certificate could not be found on the local machine. Please check the certificate manager and verify that the certificate is available in the Personal store of the Local Machine");
+            }
+
+            return results[0];
+        }
+
     }
 }

@@ -16,7 +16,7 @@ namespace NLog.Raven.Tests
         {
             var ravenTarget = new RavenTarget
             {
-                ConnectionStringName = "RavenNLog",
+                Urls = "RavenNLog",
                 Fields = new List<RavenField>()
                 {
                     new RavenField("Host", new SimpleLayout("${machinename}")),
