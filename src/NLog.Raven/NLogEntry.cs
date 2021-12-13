@@ -6,10 +6,16 @@ using System.Linq;
 
 namespace NLog.Raven
 {
+    /// <summary>
+    /// 
+    /// </summary>
     public class NLogEntry : DynamicObject
     {
         [NonSerialized] private readonly Dictionary<string, object> _fields = new Dictionary<string, object>();
 
+        /// <summary>
+        /// Gets or sets the value associated with the specified key.
+        /// </summary>
         public object this[string index]
         {
             get => _fields[index];
@@ -101,7 +107,7 @@ namespace NLog.Raven
         /// <param name="indexes">
         ///     The indexes that are used in the operation. For example, for the sampleObject[3] = 10 operation
         ///     in C# (sampleObject(3) = 10 in Visual Basic), where sampleObject is derived from the
-        ///     <see cref="T:System.Dynamic.DynamicObject" /> class, <paramref name="indexes[0]" /> is equal to 3.
+        ///     <see cref="T:System.Dynamic.DynamicObject" /> class, <paramref name="indexes" />[0] is equal to 3.
         /// </param>
         /// <param name="value">
         ///     The value to set to the object that has the specified index. For example, for the sampleObject[3] =
@@ -126,7 +132,7 @@ namespace NLog.Raven
         /// <param name="indexes">
         ///     The indexes that are used in the operation. For example, for the sampleObject[3] operation in C#
         ///     (sampleObject(3) in Visual Basic), where sampleObject is derived from the DynamicObject class,
-        ///     <paramref name="indexes[0]" /> is equal to 3.
+        ///     <paramref name="indexes" />[0] is equal to 3.
         /// </param>
         /// <param name="result">The result of the index operation.</param>
         /// <returns>
@@ -162,10 +168,12 @@ namespace NLog.Raven
             return response;
         }
 
+        /// <summary>
+        /// Gets the value associated with the specified key.
+        /// </summary>
         public object GetValue(string key)
         {
             _fields.TryGetValue(key, out object value);
-
             return value;
         }
 
