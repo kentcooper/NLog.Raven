@@ -1,46 +1,93 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Net;
 using System.Security.Cryptography.X509Certificates;
-using System.Text;
-using System.Threading.Tasks;
 using NLog.Common;
 using NLog.Config;
+using NLog.Layouts;
 using NLog.Targets;
 using Raven.Client.Documents;
 using Raven.Client.Documents.Conventions;
 
 namespace NLog.Raven
 {
+    /// <summary>
+    /// RavenDB target for NLog
+    /// </summary>
     [Target("Raven")]
     public class RavenTarget : TargetWithLayout
     {
         private DocumentStore _documentStore;
-        public string Urls { get; set; }
-        public string Database { get; set; }
+
+        /// <summary>
+        /// Urls for DocumentStore
+        /// </summary>
+        public Layout Urls { get; set; }
+
+        /// <summary>
+        /// Default database name for DocumentStore
+        /// </summary>
+        public Layout Database { get; set; }
+
+        /// <summary>
+        /// The id type to use for log entries. Either 'String' | 'Guid'
+        /// </summary>
         public string IdType { get; set; } = "string";
-        public string CertPath { get; set; }
+
+        /// <summary>
+        /// File Path to Client Certificate
+        /// </summary>
+        public Layout CertPath { get; set; }
+
+        /// <summary>
+        /// Certificate Store Location Type. See also <see cref="StoreLocation"/>
+        /// </summary>
         public string CertStoreLocation { get; set; }
-        public string CertThumbprint { get; set; }
-        public string CertCn { get; set; }
-        public string CertStoreName { get; set; }
 
-        public string CollectionName { get; set; } = "NLogEntries";
+        /// <summary>
+        /// Certificate Store Location Name.
+        /// </summary>
+        public Layout CertStoreName { get; set; }
 
+        /// <summary>
+        /// Lookup certificate from <see cref="X509FindType.FindByThumbprint"/>
+        /// </summary>
+        public Layout CertThumbprint { get; set; }
+
+        /// <summary>
+        /// Lookup certificate from <see cref="X509FindType.FindBySubjectName"/>
+        /// </summary>
+        public Layout CertCn { get; set; }
+
+        /// <summary>
+        /// Default document collection name
+        /// </summary>
+        public Layout CollectionName { get; set; } = "NLogEntries";
+
+        /// <summary>
+        /// 
+        /// </summary>
         [ArrayParameter(typeof(RavenField), "field")]
         public IList<RavenField> Fields { get; set; } = new List<RavenField>();
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="RavenTarget"/> class.
+        /// </summary>
         public RavenTarget()
         {
             Name = "Raven";
+            OptimizeBufferReuse = true;
         }
 
+        /// <inheritdoc/>
         protected override void InitializeTarget()
         {
             base.InitializeTarget();
 
-            if (string.IsNullOrWhiteSpace(Urls))
+            var defaultLogEvent = LogEventInfo.CreateNullEvent();
+
+            var urls = RenderLogEvent(Urls, defaultLogEvent);
+            if (string.IsNullOrWhiteSpace(urls))
             {
                 throw new NLogConfigurationException(
                     "Cannot resolve RavenDB Url. Please make sure either the Url or ConnectionStringName property is set.");
@@ -48,72 +95,53 @@ namespace NLog.Raven
 
             _documentStore = new DocumentStore
             {
-                Urls = Urls.Split('\u002C')
+                Urls = urls.Split('\u002C')
             };
 
-            if (!string.IsNullOrWhiteSpace(Database))
+            var database = RenderLogEvent(Database, defaultLogEvent);
+            if (!string.IsNullOrWhiteSpace(database))
             {
-                _documentStore.Database = Database;
+                _documentStore.Database = database;
             }
 
-            if (!string.IsNullOrWhiteSpace(CertPath))
+            var certificate = TryLoadCertificate();
+            if (certificate != null)
             {
-                X509Certificate2 clientCertificate = new X509Certificate2(CertPath);
-                _documentStore.Certificate = clientCertificate;
-            }
-            else if (!string.IsNullOrWhiteSpace(CertStoreName) && (!string.IsNullOrWhiteSpace(CertCn) || !string.IsNullOrWhiteSpace(CertThumbprint)))
-            {
-                _documentStore.Certificate = LoadCertificate();
+                _documentStore.Certificate = certificate;
             }
 
-
-            _documentStore.Conventions.FindCollectionName = type => type == typeof(NLogEntry) ? CollectionName : DocumentConventions.DefaultGetCollectionName(type);                        
+            var collectionName = RenderLogEvent(CollectionName, defaultLogEvent);
+            _documentStore.Conventions.FindCollectionName = type => type == typeof(NLogEntry) ? collectionName : DocumentConventions.DefaultGetCollectionName(type);                        
             _documentStore.Initialize();
-
-
-
         }
 
-        [Obsolete]
-        protected override void Write(AsyncLogEventInfo logEvent)
-        {
-            Write(new[] { logEvent });
-        }
-
-        [Obsolete]
-        protected override void Write(AsyncLogEventInfo[] logEvents)
+        /// <inheritdoc/>
+        protected override void Write(IList<AsyncLogEventInfo> logEvents)
         {
             try
             {
-                var events = logEvents.Select(e => e.LogEvent);
-
-                var nLogEntries = new List<NLogEntry>();
-
-                foreach (var logEvent in events)
-                {
-                    nLogEntries.Add(CreateLogEntry(logEvent));
-                }
-
                 using (var bulkInsert = _documentStore.BulkInsert())
                 {
-                    foreach (var nLogEntry in nLogEntries)
+                    for (int i = 0; i < logEvents.Count; ++i)
                     {
-                        bulkInsert.Store(nLogEntry);
+                        var logEvent = logEvents[i].LogEvent;
+                        var logEntry = CreateLogEntry(logEvent);
+                        bulkInsert.Store(logEntry);
                     }
                 }
-
             }
             catch (Exception ex)
             {
-                InternalLogger.Error($"Error while sending log messages to RavenDB: message=\"{ex.Message}\"");
+                InternalLogger.Error(ex, "Error while sending log messages to RavenDB");
 
                 foreach (var ev in logEvents)
                 {
                     ev.Continuation(ex);
-
                 }
             }
         }
+
+        /// <inheritdoc/>
         protected override void Write(LogEventInfo logEvent)
         {
             try
@@ -126,8 +154,8 @@ namespace NLog.Raven
             }
             catch (Exception ex)
             {
-                InternalLogger.Error($"Error while sending log messages to RavenDB: message=\"{ex.Message}\"");
-
+                InternalLogger.Error(ex, "Error while sending log messages to RavenDB");
+                throw;
             }
         }
 
@@ -145,25 +173,44 @@ namespace NLog.Raven
                 entry.Id = Guid.NewGuid();
             }
 
-            foreach (var field in Fields)
+            for (int i = 0; i < Fields.Count; ++i)
             {
-                var renderedField = field.Layout.Render(logEvent);
+                var field = Fields[i];
 
-                if (!string.IsNullOrWhiteSpace(renderedField))
+                var fieldValue = RenderLogEvent(field.Layout, logEvent);
+                if (!string.IsNullOrWhiteSpace(fieldValue))
                 {
-                    entry[field.Name] = renderedField;
+                    entry[field.Name] = fieldValue;
                 }
             }
 
             return entry;
         }
 
-
-        private X509Certificate2 LoadCertificate()
+        private X509Certificate2 TryLoadCertificate()
         {
+            var defaultLogEvent = LogEventInfo.CreateNullEvent();
+
+            var certPath = RenderLogEvent(CertPath, defaultLogEvent);
+            if (!string.IsNullOrWhiteSpace(certPath))
+            {
+                X509Certificate2 clientCertificate = new X509Certificate2(certPath);
+                return clientCertificate;
+            }
+
+            var certStoreName = RenderLogEvent(CertStoreName, defaultLogEvent);
+            if (string.IsNullOrWhiteSpace(certStoreName))
+            {
+                return null;
+            }
+
+            var certStoreLocation = RenderLogEvent(CertStoreLocation, defaultLogEvent);
+            var certCn = RenderLogEvent(CertCn, defaultLogEvent);
+            var certThumbprint = RenderLogEvent(CertThumbprint, defaultLogEvent);
+
             StoreLocation location;
 
-            switch (CertStoreLocation)
+            switch (certStoreLocation)
             {
                 case "CurrentUser":
                     location = StoreLocation.CurrentUser;
@@ -172,19 +219,19 @@ namespace NLog.Raven
                     location = StoreLocation.LocalMachine;
                     break;
             }
-            X509Store store = new X509Store(CertStoreName, location);
+            X509Store store = new X509Store(certStoreName, location);
 
             store.Open(OpenFlags.ReadOnly | OpenFlags.OpenExistingOnly);
 
             X509Certificate2Collection results;
 
-            if (!string.IsNullOrEmpty(CertCn))
+            if (!string.IsNullOrEmpty(certCn))
             {
-                results = store.Certificates.Find(X509FindType.FindBySubjectName, CertCn, false);
+                results = store.Certificates.Find(X509FindType.FindBySubjectName, certCn, false);
             }
             else
             {
-                results = store.Certificates.Find(X509FindType.FindByThumbprint, CertThumbprint, false);
+                results = store.Certificates.Find(X509FindType.FindByThumbprint, certThumbprint, false);
             }
 
             if (results.Count < 1)
@@ -194,6 +241,5 @@ namespace NLog.Raven
 
             return results[0];
         }
-
     }
 }

@@ -24,31 +24,17 @@ More information about NuGet package avaliable at
 <targets>
   <target xsi:type="Raven"
           name="String"
-          connectionStringName="String"
-          url="String"
-          user="String"
-          password="String"
-          domain="String"
-          database="String"          
-          idType="String"
-          collectionName="String">
-    
-    <!-- repeated --> 
-    <field name="String" layout="Layout" />    
+          urls="Layout"
+          database="Layout"          
+          collectionName="Layout"
+          idType="String">
+    <field name="String" layout="Layout" /> <!-- repeated --> 
   </target>
 </targets>
 ```
 ## Parameters
 
-_connectionStringName_ - The name of the connection string to get from the config file. 
-
-_url_ - The url of the raven db server
-
-_user_ - The windows user name to use when making the connection
-
-_password_ - The password of the user to use when making the connection
-
-_domain_ - The windows domain
+_urls_ - The url of the raven db server
 
 _database_ - The name of the database to connect to
 
@@ -61,12 +47,12 @@ _collectionName_ - Set this to change the default document collection name
 ```xml
 <targets>
       <target name="raven" xsi:type="BufferingWrapper" flushTimeout="7000">
-        <target  xsi:type="Raven" ConnectionStringName="RavenNLog" IdType="Guid" CollectionName="LogEntries">
+        <target  xsi:type="Raven" Urls="http://ws-1:8080;Database=RavenNLog" IdType="Guid" CollectionName="LogEntries">
           <field name="EventDate" layout="${longdate}"/>
           <field name="Logger" layout="${logger}"/>
           <field name="Message" layout="${message}"/>
           <field name="Host" layout="${machinename}"/>
-          <field name="Exception" layout="${exception:format=toString,Data:maxInnerExceptionLevel=10}"/>
+          <field name="Exception" layout="${exception:format=toString,Data}"/>
         </target>
       </target>
 </targets>
