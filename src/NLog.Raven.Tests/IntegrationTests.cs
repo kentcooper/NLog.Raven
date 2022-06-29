@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using NLog.Config;
 using NLog.Layouts;
@@ -14,15 +15,7 @@ namespace NLog.Raven.Tests
         [Fact]
         public void SimpleLogTest()
         {
-            var ravenTarget = new RavenTarget
-            {
-                Urls = "RavenNLog",
-                Fields = new List<RavenField>()
-                {
-                    new RavenField("Host", new SimpleLayout("${machinename}")),
-                    new RavenField("EventDate", new SimpleLayout("${longdate}"))
-                }
-            };
+            var ravenTarget = CreateRavenTarget();
 
             var rule = new LoggingRule("*", ravenTarget);
 
@@ -37,6 +30,29 @@ namespace NLog.Raven.Tests
             var logger = LogManager.GetLogger("RavenExample");
 
             logger.Info("Hello RavenDB Simple Log");
+
+            LogManager.Flush();
+
+        }
+
+        [Fact]
+        public void SimpleLogExpireTest()
+        {
+            var ravenTarget = CreateRavenTarget(true);
+
+            var rule = new LoggingRule("*", ravenTarget);
+
+            rule.EnableLoggingForLevel(LogLevel.Info);
+
+            var config = new LoggingConfiguration();
+
+            config.LoggingRules.Add(rule);
+
+            LogManager.Configuration = config;
+
+            var logger = LogManager.GetLogger("RavenExample");
+
+            logger.Info("Hello RavenDB Simple Log Expire");
 
             LogManager.Flush();
 
@@ -74,6 +90,27 @@ namespace NLog.Raven.Tests
             }
 
             LogManager.Flush();
+        }
+        
+        private static RavenTarget CreateRavenTarget(bool expires = false)
+        {
+            var target = new RavenTarget
+            {
+                Urls = "http://localhost:8080",
+                Fields = new List<RavenField>
+                {
+                    new RavenField("Host", new SimpleLayout("${machinename}")),
+                    new RavenField("EventDate", new SimpleLayout("${longdate}")),
+                    new RavenField("Message", new SimpleLayout("${message}")),
+                    new RavenField("Exception", new SimpleLayout("${exception:format=toString}")),
+                },
+                Database = "logs",
+                CollectionName = "Nlog"
+            };
+            if (expires)
+                target.ExpirationOffsetInDays = 5;
+
+            return target;
         }
 
     }

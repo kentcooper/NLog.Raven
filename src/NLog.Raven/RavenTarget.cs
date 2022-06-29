@@ -6,8 +6,10 @@ using NLog.Common;
 using NLog.Config;
 using NLog.Layouts;
 using NLog.Targets;
+using Raven.Client;
 using Raven.Client.Documents;
 using Raven.Client.Documents.Conventions;
+using Raven.Client.Json;
 
 namespace NLog.Raven
 {
@@ -69,6 +71,11 @@ namespace NLog.Raven
         /// </summary>
         [ArrayParameter(typeof(RavenField), "field")]
         public IList<RavenField> Fields { get; set; } = new List<RavenField>();
+        
+        /// <summary>
+        /// Expiration date of document
+        /// </summary>
+        public int ExpirationOffsetInDays { get; set; }
 
         /// <summary>
         /// Initializes a new instance of the <see cref="RavenTarget"/> class.
@@ -76,7 +83,6 @@ namespace NLog.Raven
         public RavenTarget()
         {
             Name = "Raven";
-            OptimizeBufferReuse = true;
         }
 
         /// <inheritdoc/>
@@ -122,11 +128,22 @@ namespace NLog.Raven
             {
                 using (var bulkInsert = _documentStore.BulkInsert())
                 {
-                    for (int i = 0; i < logEvents.Count; ++i)
+                    foreach (var log in logEvents)
                     {
-                        var logEvent = logEvents[i].LogEvent;
+                        var logEvent = log.LogEvent;
                         var logEntry = CreateLogEntry(logEvent);
-                        bulkInsert.Store(logEntry);
+                        if (ExpirationOffsetInDays > 0)
+                        {
+                            var expiry = DateTime.UtcNow.AddDays(ExpirationOffsetInDays);
+                            bulkInsert.Store(logEntry, new MetadataAsDictionary
+                            {
+                                new KeyValuePair<string, object>("@expires", expiry)
+                            });
+                        }
+                        else
+                        {
+                            bulkInsert.Store(logEntry);
+                        }
                     }
                 }
             }
@@ -146,9 +163,14 @@ namespace NLog.Raven
         {
             try
             {
+                var expiry = DateTime.UtcNow.AddDays(ExpirationOffsetInDays);
                 using (var session = _documentStore.OpenSession())
                 {
-                    session.Store(CreateLogEntry(logEvent));
+                    var entry = CreateLogEntry(logEvent);
+                    session.Store(entry);
+                    if(ExpirationOffsetInDays > 0)
+                        session.Advanced.GetMetadataFor(entry)[Constants.Documents.Metadata.Expires] = expiry;
+                    
                     session.SaveChanges();
                 }
             }
