@@ -108,7 +108,7 @@ namespace NLog.Raven.Tests
                 CollectionName = "Nlog"
             };
             if (expires)
-                target.ExpirationOffsetInDays = 5;
+                target.ExpiryDays = 5;
 
             return target;
         }

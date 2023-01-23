@@ -75,7 +75,7 @@ namespace NLog.Raven
         /// <summary>
         /// Expiration date of document
         /// </summary>
-        public int ExpirationOffsetInDays { get; set; }
+        public int ExpiryDays { get; set; }
 
         /// <summary>
         /// Initializes a new instance of the <see cref="RavenTarget"/> class.
@@ -128,17 +128,19 @@ namespace NLog.Raven
             {
                 using (var bulkInsert = _documentStore.BulkInsert())
                 {
+                    var expiry = DateTime.UtcNow.AddDays(ExpiryDays);
+                    var expirationMetadata = new MetadataAsDictionary
+                    {
+                        new KeyValuePair<string, object>(Constants.Documents.Metadata.Expires, expiry)
+                    };
+
                     foreach (var log in logEvents)
                     {
                         var logEvent = log.LogEvent;
                         var logEntry = CreateLogEntry(logEvent);
-                        if (ExpirationOffsetInDays > 0)
+                        if (ExpiryDays > 0)
                         {
-                            var expiry = DateTime.UtcNow.AddDays(ExpirationOffsetInDays);
-                            bulkInsert.Store(logEntry, new MetadataAsDictionary
-                            {
-                                new KeyValuePair<string, object>("@expires", expiry)
-                            });
+                            bulkInsert.Store(logEntry, expirationMetadata);
                         }
                         else
                         {
@@ -163,12 +165,12 @@ namespace NLog.Raven
         {
             try
             {
-                var expiry = DateTime.UtcNow.AddDays(ExpirationOffsetInDays);
+                var expiry = DateTime.UtcNow.AddDays(ExpiryDays);
                 using (var session = _documentStore.OpenSession())
                 {
                     var entry = CreateLogEntry(logEvent);
                     session.Store(entry);
-                    if(ExpirationOffsetInDays > 0)
+                    if(ExpiryDays > 0)
                         session.Advanced.GetMetadataFor(entry)[Constants.Documents.Metadata.Expires] = expiry;
                     
                     session.SaveChanges();
