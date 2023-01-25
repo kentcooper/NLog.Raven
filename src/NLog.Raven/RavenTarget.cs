@@ -128,17 +128,16 @@ namespace NLog.Raven
             {
                 using (var bulkInsert = _documentStore.BulkInsert())
                 {
-                    var expiry = DateTime.UtcNow.AddDays(ExpiryDays);
-                    var expirationMetadata = new MetadataAsDictionary
+                    var expirationMetadata = ExpiryDays > 0 ? new MetadataAsDictionary
                     {
-                        new KeyValuePair<string, object>(Constants.Documents.Metadata.Expires, expiry)
-                    };
+                        new KeyValuePair<string, object>(Constants.Documents.Metadata.Expires, DateTime.UtcNow.AddDays(ExpiryDays))
+                    } : null;
 
                     foreach (var log in logEvents)
                     {
                         var logEvent = log.LogEvent;
                         var logEntry = CreateLogEntry(logEvent);
-                        if (ExpiryDays > 0)
+                        if (expirationMetadata != null)
                         {
                             bulkInsert.Store(logEntry, expirationMetadata);
                         }
